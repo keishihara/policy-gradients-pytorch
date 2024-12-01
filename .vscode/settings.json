@@ -1,0 +1,34 @@
+{
+    // ruff
+    "ruff.enable": true,
+    "ruff.importStrategy": "fromEnvironment",
+    "ruff.lint.run": "onType", // onType or onSave
+    "ruff.codeAction.fixViolation": {
+        "enable": true
+    },
+    "ruff.codeAction.disableRuleComment": { // # nopa to ignore Quick fix
+        "enable": true
+    },
+    "ruff.showNotifications": "always", // "off", "onError", "onWarning", "always"
+    // editor
+    "editor.formatOnSave": true, // whether to format on save
+    "editor.formatOnPaste": false, // whether to format on paste
+    "editor.formatOnType": false, // whether to format on type
+    "editor.formatOnSaveMode": "file", // "file": format entier file, "modifications": format modified parts
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit",
+        "source.organizeImports": "explicit"
+    },
+    // python file
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnPaste": false,
+        "editor.formatOnType": false,
+        "editor.formatOnSaveMode": "file",
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.codeActionsOnSave": {
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
+        }
+    }
+}
