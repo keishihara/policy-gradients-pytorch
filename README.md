@@ -7,11 +7,12 @@ Experiments are conducted on the following environments:
 - [CartPole-v1](https://gymnasium.farama.org/environments/classic_control/cart_pole/)
 - [PongNoFrameskip-v4](https://ale.farama.org/environments/pong/)
 
-If you'd like to try other Gym environments, you'll need to define the corresponding hyperprameters in `hparams/` and adjust the scripts to handle the new observation and action spaces, and the network architecture.
+If you'd like to try other Gym environments, you'll need to define the corresponding hyperparameters in `hparams/` and adjust the scripts to handle the new observation and action spaces, and the network architecture.
 
 ## Getting Started
 
-This code is developed and tested with Python 3.11 and CUDA 12.1, which is assumed to be installed in advance. Follow steps below to install this package.
+The code is developed and tested with Python 3.11 and CUDA 12.1.
+Make sure you have them installed, and then follow the steps below to setup.
 
 ```bash
 git clone https://github.com/keishihara/policy-gradients-pytorch.git
@@ -30,14 +31,14 @@ This repo currently contains the following classic policy gradient algorithms. A
 
 ### 1. REINFORCE
 
-The simplest pg algorithm which works by following the gradient of the expected cumulative reward.
+The simplest policy gradient algorithm, which optimizes the policy by following the gradient of the expected cumulative reward.
 
 ```bash
 # CartPole-v1
 python algos/reinforce/reinforce.py --cuda
 ```
 
-## 2. Vanilla Policy Gradient (VPG)
+### 2. Vanilla Policy Gradient (VPG)
 
 An upgraded version of REINFORCE that incorporates a baseline to reduce variance in the gradient estimate.
 
@@ -55,7 +56,7 @@ python algos/vpg/vpg_on_atari.py --cuda
 
 ### 3. Advantage Actor-Critic (A2C)
 
-A more advanced algorithm that introduces a critic network to estimate the value function (state dependent baseline), enabling it to solve Atari games with pixel observations.
+A more advanced algorithm that introduces a critic network to estimate the value function (state-dependent baseline), enabling it to solve Atari games with pixel observations.
 
 ```bash
 # Train a policy on PongNoFrameskip-v4
