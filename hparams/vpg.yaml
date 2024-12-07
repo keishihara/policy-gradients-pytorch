@@ -6,7 +6,7 @@ defaults:
   seed: 42
   deterministic: false
 
-CartPole-v1:
+CartPole-v0:
   max_steps: 1_000_000
   mean_reward_bound: 195
   gamma: 0.99
@@ -16,16 +16,28 @@ CartPole-v1:
   reward_steps: 10
   entropy_beta: 0.01
 
-PongNoFrameskip-v4:
+CartPole-v1:
   max_steps: 1_000_000
-  mean_reward_bound: 20
+  mean_reward_bound: 475
   gamma: 0.99
-  learning_rate: 1.0e-4
+  learning_rate: 2.5e-4
   batch_size: 128
-  episode_limit_steps: 200
-  reward_steps: 10
+  episode_limit_steps: 500
+  reward_steps: 20
   entropy_beta: 0.01
-  n_envs: 32
+  eval_every_n_steps: 100_000
+
+PongNoFrameskip-v4:
+  max_steps: 20_000_000
+  mean_reward_bound: 18
+  gamma: 0.99
+  learning_rate: 1.0e-3
+  batch_size: 128
+  episode_limit_steps: 500
+  reward_steps: 4
+  entropy_beta: 0.01
+  n_envs: 50
   baseline_steps: 1_000_000
   grad_l2_clip: 0.1
   reward_window_size: 50
+  console_log_freq: 1 # in episodes
