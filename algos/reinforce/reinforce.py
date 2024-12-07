@@ -197,15 +197,12 @@ def main(args) -> None:
             suffix = reward_tracker.as_suffix()
             if res.episode_reward_mean >= best_score:
                 logger.info(f"Best evaluation score updated from {best_score:.3f} to {res.episode_reward_mean:.3f}.")
-                # Save video
-                dst = f"{step=}_{episode=}_{res.best_episode_reward=:.3f}_{suffix}_best_episode.{{ext}}"
+                dst = f"{step=}_{episode=}_reward={res.best_episode_reward:.3f}_{suffix}_best_episode.{{ext}}"
                 tools.save_video(res.best_episode_frames[::2], args.video_dir / dst.format(ext="mp4"))
-                # Save checkpoint
                 tools.save_state_dict(policy, args.ckpts_dir / dst.format(ext="pt"))
                 best_score = res.best_episode_reward
             else:
-                # Save video
-                dst = f"eval_replay_{step=}_{episode=}_{res.best_episode_reward=:.3f}_{suffix}.{{ext}}"
+                dst = f"{step=}_{episode=}_reward={res.best_episode_reward:.3f}_{suffix}.{{ext}}"
                 tools.save_video(res.best_episode_frames[::2], args.video_dir / dst.format(ext="mp4"))
 
             policy.train()
@@ -216,6 +213,7 @@ def main(args) -> None:
         # ================ #
         #  Training step   #
         # ================ #
+        # The training step occurs when the batch size reaches `episodes_to_train` episodes.
 
         batch_obs = default_preprocessor(batch_obs).to(device)
         batch_acts = torch.tensor(np.int64(batch_acts)).long().to(device)
