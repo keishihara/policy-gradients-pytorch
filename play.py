@@ -42,7 +42,7 @@ def main(args: Namespace) -> None:
     agent = DiscreteActionAgent(model, device=device)
 
     frames = []
-    obs, _ = env.reset()
+    obs, _ = env.reset(seed=args.seed)
     while True:
         action = agent.deterministic_policy(obs)
         obs, _, terminated, truncated, _ = env.step(action)
