@@ -107,12 +107,12 @@ def main(args) -> None:
     batch_acts = []
     batch_qvals = []
 
-    step = 0
+    global_step = 0
     episode = 0
     batch_episodes = 0
     gradient_step = 0
     running_mean_entropy = 0
-    best_score = -1
+    best_score = float("-inf")
 
     obs, _ = env.reset(seed=config.seed)
     terminated, truncated = False, False
@@ -121,7 +121,7 @@ def main(args) -> None:
     time_enter = time.time()
 
     # Collect transitions by acting in the env with "current policy" (on-policy)
-    while step < config.max_steps:
+    while global_step < config.max_steps:
         if args.render and not finished_rendering_this_epoch:
             env.render()
 
@@ -148,21 +148,21 @@ def main(args) -> None:
             batch_qvals.extend(calc_q_values(ep_rewards, config.gamma))
 
             total_reward = sum(ep_rewards)
-            if reward_tracker.add(total_reward, step):
+            if reward_tracker.add(total_reward, global_step):
                 msg = "\n" + (
-                    f"Task solved in {step+1:,} steps, {episode+1:,} episodes.\n"
+                    f"Task solved in {global_step+1:,} steps, {episode+1:,} episodes.\n"
                     f"Running mean return: {reward_tracker.get():.3f}\n"
                     f"Time taken: {tools.seconds_to_hms(time.time() - time_enter)}.\n"
                 )
                 logger.info(msg)
                 suffix = reward_tracker.as_suffix()
-                dst = f"final_ckpt_{step=}_{episode=}_{suffix}.pt"
+                dst = f"final_ckpt_{global_step=}_{episode=}_{suffix}.pt"
                 tools.save_state_dict(policy, args.ckpts_dir / dst)
                 break
 
-            writer.add_scalar("rollout/lastest_reward", total_reward, step)
+            writer.add_scalar("rollout/lastest_reward", total_reward, global_step)
             if episode % config.console_log_freq == 0:
-                logger.info(f"{step}: done {episode} games, mean reward {reward_tracker.get():.3f} ")
+                logger.info(f"{global_step}: done {episode} games, mean reward {reward_tracker.get():.3f} ")
 
             obs, _ = env.reset()
             terminated, truncated, ep_rewards = False, False, []
@@ -170,15 +170,15 @@ def main(args) -> None:
             batch_episodes += 1
             episode += 1
 
-        step += 1
+        global_step += 1
 
         # ============= #
         #   Evaluation  #
         # ============= #
 
         if (
-            step > 0  # Skip evaluation at the very beginning of training
-            and step % config.eval_every_n_steps == 0
+            global_step > 0  # Skip evaluation at the very beginning of training
+            and global_step % config.eval_every_n_steps == 0
         ):
             policy.eval()
             res = tools.evaluate_policy(
@@ -186,23 +186,24 @@ def main(args) -> None:
                 env=gym.make(args.env_id, render_mode="rgb_array"),
                 n_eval_episodes=config.n_eval_episodes,
             )
-            writer.add_scalar("eval/return_mean", res.episode_reward_mean, step)
-            writer.add_scalar("eval/return_std", res.episode_reward_std, step)
-            writer.add_scalar("eval/ep_len_mean", res.episode_length_mean, step)
+            writer.add_scalar("eval/return_mean", res.episode_reward_mean, global_step)
+            writer.add_scalar("eval/return_std", res.episode_reward_std, global_step)
+            writer.add_scalar("eval/ep_len_mean", res.episode_length_mean, global_step)
             logger.info(
-                f"Eval at step {step} - total reward: {res.episode_reward_mean:.3f} +/- {res.episode_reward_std:.3f} "
+                f"Eval at step {global_step} - total reward: {res.episode_reward_mean:.2f} +/- {res.episode_reward_std:.2f} "
                 f"across {config.n_eval_episodes} episodes.\n"
-                f"Elapsed time {tools.seconds_to_hms(time.time() - time_enter)}\n"
+                f"Elapsed time {tools.seconds_to_hms(time.time() - time_enter)}"
             )
+
             suffix = reward_tracker.as_suffix()
             if res.episode_reward_mean >= best_score:
-                logger.info(f"Best evaluation score updated from {best_score:.3f} to {res.episode_reward_mean:.3f}.")
-                dst = f"{step=}_{episode=}_reward={res.best_episode_reward:.3f}_{suffix}_best_episode.{{ext}}"
+                logger.info(f"Best evaluation score updated from {best_score:.2f} to {res.episode_reward_mean:.2f}.")
+                dst = f"{global_step=}_{episode=}_reward={res.best_episode_reward:.2f}_{suffix}_best_episode.{{ext}}"
                 tools.save_video(res.best_episode_frames, args.video_dir / dst.format(ext="mp4"))
                 tools.save_state_dict(policy, args.ckpts_dir / dst.format(ext="pt"))
-                best_score = res.best_episode_reward
+                best_score = res.episode_reward_mean
             else:
-                dst = f"{step=}_{episode=}_reward={res.best_episode_reward:.3f}_{suffix}.{{ext}}"
+                dst = f"{global_step=}_{episode=}_reward={res.best_episode_reward:.2f}_{suffix}.{{ext}}"
                 tools.save_video(res.best_episode_frames, args.video_dir / dst.format(ext="mp4"))
 
             policy.train()
@@ -247,13 +248,13 @@ def main(args) -> None:
         new_prob = F.softmax(new_logits, dim=1)
         kl_div = ((new_prob / prob).log() * new_prob).sum(dim=1).mean().item()
 
-        writer.add_scalar("time/episode", episode, step)
-        writer.add_scalar("time/gradient_step", gradient_step, step)
-        writer.add_scalar("time/time_elapsed", time.time() - time_enter, step)
-        writer.add_scalar("train/batch_size", len(batch_obs), step)
-        writer.add_scalar("train/loss", loss.item(), step)
-        writer.add_scalar("metrics/running_mean_entropy", running_mean_entropy, step)
-        writer.add_scalar("metrics/kl_div", kl_div, step)
+        writer.add_scalar("time/episode", episode, global_step)
+        writer.add_scalar("time/gradient_step", gradient_step, global_step)
+        writer.add_scalar("time/time_elapsed", time.time() - time_enter, global_step)
+        writer.add_scalar("train/batch_size", len(batch_obs), global_step)
+        writer.add_scalar("train/loss", loss.item(), global_step)
+        writer.add_scalar("metrics/running_mean_entropy", running_mean_entropy, global_step)
+        writer.add_scalar("metrics/kl_div", kl_div, global_step)
 
         batch_obs = []
         batch_acts = []

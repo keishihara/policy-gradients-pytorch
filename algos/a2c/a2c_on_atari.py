@@ -123,23 +123,24 @@ def make_env(env_id: str, **kwargs) -> Env:
 
 
 def main(args) -> None:
+    # Load hyperparams and setup for logging
     config = tools.read_hyperparameters("a2c", args.env_id, args.hparams)
-    tools.set_seed_everywhere(config.seed, deterministic=config.deterministic)
     tools.setup_logdir(args, f"a2c_{args.env_id}{args.infix}", subdirs=["video"])
     config.to_json(args.log_dir / "config.json", indent=4)
-
     writer = SummaryWriter(args.log_dir)
     tools.add_file_handler(logger, args.log_dir / "console.log")
+
+    tools.set_seed_everywhere(config.seed, deterministic=config.deterministic)
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
-    # Prepare envs
+    # Instantiate the environment
     envs: list[Env] = [make_env(args.env_id) for _ in range(config.n_envs)]
     [envs[i].action_space.seed(config.seed + i) for i in range(config.n_envs)]
 
-    # Build actor and clitic models
     input_shape = envs[0].observation_space.shape  # (4, 84, 84)
     n_actions = envs[0].action_space.n
 
+    # Build actor and critic models
     model = AtariA2C(input_shape=input_shape, n_actions=n_actions)
     model.apply(tools.orthgonal_initialization)
     model.to(device)
@@ -154,13 +155,7 @@ def main(args) -> None:
     def eval_agent(obs: Observations) -> Actions:
         return agent(obs, deterministic=True)
 
-    rollout = RolloutSimulatorFirstLast(
-        envs,
-        agent=agent,
-        n_steps=config.reward_steps,
-        gamma=config.gamma,
-        env_seed=config.seed,
-    )
+    rollout = RolloutSimulatorFirstLast(envs, agent, n_steps=config.reward_steps, gamma=config.gamma)
     logger.info(rollout)
 
     reward_tracker = tools.RunningMeanTrackerForSingleMetric(
@@ -192,12 +187,11 @@ def main(args) -> None:
 
             if reward_tracker.add(total_reward, global_step):
                 # Training completed
-                msg = "\n" + (
+                logger.info(
                     f"Task solved in {global_step:,} steps, {episode:,} episodes.\n"
                     f"Running mean reward: {reward_tracker.get():.3f}\n"
-                    f"Time taken: {tools.seconds_to_hms(time.time() - time_enter)}.\n"
+                    f"Time taken: {tools.seconds_to_hms(time.time() - time_enter)}."
                 )
-                logger.info(msg)
                 suffix = reward_tracker.as_suffix()
                 dst = f"final_ckpt_{global_step=}_{episode=}_{suffix}.pt"
                 tools.save_state_dict(model, args.ckpts_dir / dst)
@@ -217,35 +211,32 @@ def main(args) -> None:
             and global_step % config.eval_every_n_steps == 0
         ):
             model.eval()
-            reward, ret_std, ep_len_mean, frames = tools.evaluate_policy(
+            res = tools.evaluate_policy(
                 eval_agent,
                 make_env=make_env,
                 env_kwargs={"env_id": args.env_id, "render_mode": "rgb_array"},
                 n_eval_episodes=config.n_eval_episodes,
-                return_frames=True,
                 seed=config.seed,
             )
-            writer.add_scalar("eval/return_mean", reward, global_step)
-            writer.add_scalar("eval/return_std", ret_std, global_step)
-            writer.add_scalar("eval/ep_len_mean", ep_len_mean, global_step)
+            writer.add_scalar("eval/return_mean", res.episode_reward_mean, global_step)
+            writer.add_scalar("eval/return_std", res.episode_reward_std, global_step)
+            writer.add_scalar("eval/ep_len_mean", res.episode_length_mean, global_step)
             logger.info(
-                f"Eval at step {global_step} - total reward: {reward:.3f} +/- {ret_std:.3f} "
+                f"Eval at step {global_step} - total reward: {res.episode_reward_mean:.2f} +/- {res.episode_reward_std:.2f} "
                 f"across {config.n_eval_episodes} episodes.\n"
-                f"Elapsed time {tools.seconds_to_hms(time.time() - time_enter)}\n"
+                f"Elapsed time {tools.seconds_to_hms(time.time() - time_enter)}"
             )
+
             suffix = reward_tracker.as_suffix()
-            if reward >= best_score:
-                logger.info(f"Best evaluation score updated from {best_score:.3f} to {reward:.3f}.")
-                # Save video
-                dst = f"best_model_{global_step=}_{episode=}_{reward=:.3f}_{suffix}.{{ext}}"
-                tools.save_video(frames[::2], args.video_dir / dst.format(ext="mp4"))
-                # Save checkpoint
+            if res.episode_reward_mean >= best_score:
+                logger.info(f"Best evaluation score updated from {best_score:.2f} to {res.episode_reward_mean:.2f}.")
+                dst = f"{global_step=}_{episode=}_reward={res.best_episode_reward:.2f}_{suffix}_best_episode.{{ext}}"
+                tools.save_video(res.best_episode_frames, args.video_dir / dst.format(ext="mp4"))
                 tools.save_state_dict(model, args.ckpts_dir / dst.format(ext="pt"))
-                best_score = reward
+                best_score = res.episode_reward_mean
             else:
-                # Save video
-                dst = f"eval_replay_{global_step=}_{episode=}_{reward=:.3f}_{suffix}.{{ext}}"
-                tools.save_video(frames[::2], args.video_dir / dst.format(ext="mp4"))
+                dst = f"{global_step=}_{episode=}_reward={res.best_episode_reward:.2f}_{suffix}.{{ext}}"
+                tools.save_video(res.best_episode_frames, args.video_dir / dst.format(ext="mp4"))
 
             model.train()
 
