@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import importlib
 import json
 import logging
 import os
@@ -22,6 +23,7 @@ import yaml
 from box import Box
 from gymnasium import Env
 from joblib import Parallel, delayed
+from PIL import Image
 from rich.logging import RichHandler
 from torch import Tensor
 from torch.utils.tensorboard import SummaryWriter
@@ -652,3 +654,21 @@ class BatchedSummaryWriter:
         if len(data) >= self.batch_size:
             self.writer.add_scalar(tag, np.mean(data), global_step)
             data.clear()
+
+
+def load_module_from_py_file(py_file: str) -> object:
+    """
+    Load a module from a Python file that is not in the Python path.
+
+    Args:
+        py_file (str): The path to the Python file to be loaded.
+
+    Returns:
+        object: The loaded module.
+    """
+    module_name = Path(py_file).name
+    loader = importlib.machinery.SourceFileLoader(module_name, str(py_file))
+    spec = importlib.util.spec_from_loader(module_name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
