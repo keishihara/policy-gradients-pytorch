@@ -8,6 +8,7 @@ import sys
 import time
 from collections import defaultdict, deque
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -300,19 +301,29 @@ def add_file_handler(logger: logging.Logger, filename: str) -> None:
     logger.addHandler(file_handler)
 
 
+@dataclass
+class EvaluationResults:
+    episode_rewards: list[float]
+    episode_lengths: list[float]
+    episode_reward_mean: float
+    episode_reward_std: float
+    episode_length_mean: float
+    frames: list[list]
+    best_episode_reward: float
+    best_episode_frames: list
+    best_episode_idx: int
+
+
 def evaluate_policy(
     policy: Callable,
     env: Env = None,
-    make_env: Callable = None,
+    make_env_fn: Callable = None,
     n_eval_episodes: int = 5,
-    seed: int = None,
-    return_frames: bool = False,
-    return_all_frames: bool = False,
-    return_raw_metrics: bool = False,
+    seed: int | None = None,
     timeout: int = 5000,
     verbose: bool = True,
-    env_kwargs: dict = None,
-) -> tuple[float, ...]:
+    env_kwargs: dict | None = None,
+) -> EvaluationResults:
     """
     Evaluates performance of given agent by letting it play a few episodes of
     the game and then calculates the average reward it gets.
@@ -320,15 +331,11 @@ def evaluate_policy(
     Args:
         policy (Callable): A function that takes observation as an input and
             outputs an action
-        make_env (Callable): A function that gives the environment to execute
+        make_env_fn (Callable): A function that gives the environment to execute
             the policy on. This must accept `env_id` param.
-        env (gym.Env): gym.Env object to run agent on. one of make_env and env
+        env (gym.Env): gym.Env object to run agent on. one of make_env_fn and env
             must be passed in.
         seed (int): Seed for env.
-        return_frames (bool): If True, returns the best episode's frames
-        return_all_frames (bool): If True, returns all episode's frames
-        return_raw_metrics (bool): If True, returns all frames of episode
-            metrics in dict, not just stats like mean and std
         timeout (int): Episode timeout in game steps
         verbose (bool): If True, progress bar will be shown. Defaults to True.
         env_kwargs (dict): Keyward arguments to be sent to make_env.
@@ -338,14 +345,13 @@ def evaluate_policy(
             length, and best frames if specified
 
     Example:
-    # Example 1: Return frames of best performing episode
-    >>> episode_reward_mean, episode_reward_std, episode_length, frames = \
-            evaluate_policy(some_policy, gym.make('CartPole-v0'), return_frames=True)
+    # Example 1
+    >>> eval_results = evaluate_policy(policy, env=gym.make('CartPole-v0'), n_eval_episodes=10)
+    >>> print(eval_results.episode_reward_mean)
+    >>> print(eval_results.episode_reward_std)
 
-    # Example 2: Pass a function to be called with env_kwargs returning an env
-    >>> episode_reward_mean, episode_reward_std, episode_length = \
-            evaluate_policy(some_policy, gym.make,
-                            env_kwargs=dict(id='CartPole-v0', render_mode('human')))
+    # Example 2
+    >>> eval_results = evaluate_policy(policy, make_env_fn=gym.make, env_kwargs=dict(id='CartPole-v0', render_mode='rgb_array'))
     """
 
     assert callable(policy), "`policy` must be callable"
@@ -353,23 +359,23 @@ def evaluate_policy(
     if env_kwargs is None:
         env_kwargs = {}
 
-    if (env is None and make_env is None) or (env is not None and make_env is not None):
-        raise ValueError("Either env or make_env param must be passed in.")
+    if env is None and make_env_fn is None:
+        raise ValueError("Either env or make_env_fn param must be passed in.")
 
-    if make_env is not None:
-        assert callable(make_env), "`make_env` must be callable"
-        env = make_env(**env_kwargs)
+    if make_env_fn is not None:
+        assert callable(make_env_fn), "`make_env_fn` must be callable"
+        env = make_env_fn(**env_kwargs)
 
     if seed is not None:
         env.action_space.seed(seed)
 
     episode_rewards = []
     episode_lengths = []
-    best_frames = None
     all_episode_frames = []
     current_best_reward = float("-inf")
+    best_episode_idx = None
 
-    for _ in tqdm(range(n_eval_episodes), disable=not verbose, desc="Evaluation"):
+    for episode_idx in tqdm(range(n_eval_episodes), disable=not verbose, desc="Evaluation"):
         episode_frames = []
         obs, _ = env.reset()
         terminated, truncated = False, False
@@ -382,8 +388,7 @@ def evaluate_policy(
             episode_reward += reward
             step += 1
 
-            if return_frames or return_all_frames:
-                episode_frames.append(env.render())
+            episode_frames.append(env.render())
 
             if terminated or truncated:
                 break
@@ -395,30 +400,28 @@ def evaluate_policy(
         # end-of-episode handling
         if episode_reward > current_best_reward:
             current_best_reward = episode_reward
-            best_frames = episode_frames
+            best_episode_idx = episode_idx
         episode_rewards.append(episode_reward)
         episode_lengths.append(step)
         all_episode_frames.append(episode_frames)
 
     env.close()
 
-    if return_raw_metrics:
-        frames = best_frames if return_frames else all_episode_frames if return_all_frames else []
-        return {
-            "ep_rews": episode_rewards,
-            "ep_lens": episode_lengths,
-            "frames": frames,
-        }
-
     episode_reward_mean = np.mean(episode_rewards)
     episode_reward_std = np.std(episode_rewards)
     episode_length_mean = np.mean(episode_lengths)
 
-    if return_frames or return_all_frames:
-        frames = best_frames if return_frames else all_episode_frames
-        return episode_reward_mean, episode_reward_std, episode_length_mean, frames
-
-    return episode_reward_mean, episode_reward_std, episode_length_mean
+    return EvaluationResults(
+        episode_rewards=episode_rewards,
+        episode_lengths=episode_lengths,
+        episode_reward_mean=episode_reward_mean,
+        episode_reward_std=episode_reward_std,
+        episode_length_mean=episode_length_mean,
+        frames=all_episode_frames,
+        best_episode_reward=current_best_reward,
+        best_episode_frames=all_episode_frames[best_episode_idx],
+        best_episode_idx=best_episode_idx,
+    )
 
 
 def evaluate_policy_parallel(
