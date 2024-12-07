@@ -198,12 +198,12 @@ def main(args) -> None:
             if res.episode_reward_mean >= best_score:
                 logger.info(f"Best evaluation score updated from {best_score:.3f} to {res.episode_reward_mean:.3f}.")
                 dst = f"{step=}_{episode=}_reward={res.best_episode_reward:.3f}_{suffix}_best_episode.{{ext}}"
-                tools.save_video(res.best_episode_frames[::2], args.video_dir / dst.format(ext="mp4"))
+                tools.save_video(res.best_episode_frames, args.video_dir / dst.format(ext="mp4"))
                 tools.save_state_dict(policy, args.ckpts_dir / dst.format(ext="pt"))
                 best_score = res.best_episode_reward
             else:
                 dst = f"{step=}_{episode=}_reward={res.best_episode_reward:.3f}_{suffix}.{{ext}}"
-                tools.save_video(res.best_episode_frames[::2], args.video_dir / dst.format(ext="mp4"))
+                tools.save_video(res.best_episode_frames, args.video_dir / dst.format(ext="mp4"))
 
             policy.train()
 
