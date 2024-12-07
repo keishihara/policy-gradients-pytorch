@@ -33,14 +33,19 @@ HYPERPARAMS_DIR = Path(__file__).parents[1] / "hparams"
 LOG_DIR = Path(__file__).parents[1] / "logs"
 
 
-def save_video(frames: list[np.integer], filename: str | Path, fps: int = 60) -> None:
+def save_video(
+    frames: list[np.ndarray] | np.ndarray,
+    filename: str,
+    fps: int = 60,
+    align_macro_block_size: bool = True,
+) -> None:
     """Save video as gif or mp4 as filename suggests
 
     Args:
         frames (array-like): frames to save
-        filename (str | Path): filename of a video clip. Allowed extentions are: `mp4` or `gif`
+        filename (str): filename of a video clip. Allowed extentions are: `mp4` or `gif`
         fps (int, optional): frame rate. Defaults to 60.
-
+        align_macro_block_size (bool, optional): Whether to align the macro block size of the frames. Defaults to True.
     Note:
         fps can be 60 at the most when saving as .gif otherwise weirdly slow gif.
         However, mp4 accepts wider range. Also, gif is typically 100x larger in
@@ -55,6 +60,11 @@ def save_video(frames: list[np.integer], filename: str | Path, fps: int = 60) ->
     filename = Path(filename).resolve()
     dirname = filename.parent
     dirname.mkdir(parents=True, exist_ok=True)
+
+    if align_macro_block_size:
+        h, w = frames[0].shape[:2]
+        nh, nw = (h + 15) // 16 * 16, (w + 15) // 16 * 16
+        frames = [Image.fromarray(frame).resize((nw, nh)) for frame in frames]
 
     frames = np.uint8(frames)
 
