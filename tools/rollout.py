@@ -1,7 +1,7 @@
 from collections import deque
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Generator
 from dataclasses import dataclass
-from typing import Generator, TypeAlias
+from typing import TypeAlias
 
 from box import Box
 from gymnasium import Env
@@ -47,14 +47,12 @@ class RolloutSimulator:
     ) -> None:
         assert n_steps >= 1
         assert steps_delta >= 1
-        if isinstance(env, (list, tuple)):
+        if isinstance(env, list | tuple):
             self.pool = env
             # Do the check for the multiple copies passed
             ids = set(id(e) for e in env)
             if len(ids) < len(env):
-                raise ValueError(
-                    "You passed single environment instance multiple times"
-                )
+                raise ValueError("You passed single environment instance multiple times")
         else:
             self.pool = [env]
 
@@ -83,7 +81,7 @@ class RolloutSimulator:
         iter_idx = 0
         while True:
             actions = self.agent(states)
-            if isinstance(actions, (int, float)):
+            if isinstance(actions, int | float):
                 actions = [actions]
 
             for idx, env in enumerate(self.pool):
@@ -133,7 +131,7 @@ class RolloutSimulatorFirstLast(RolloutSimulator):
         steps_delta: int = 1,
         env_seed: int | None = None,
     ) -> None:
-        super(RolloutSimulatorFirstLast, self).__init__(
+        super().__init__(
             env,
             agent,
             n_steps=n_steps + 1,  # NOTE: This seems to be important
