@@ -74,15 +74,17 @@ def calc_q_values(rewards: list[float], gamma: float = 0.99) -> list[float]:
 
 
 def main(args) -> None:
+    # Load hyperparams and setup for logging
     config = tools.read_hyperparameters("reinforce", args.env_id, args.hparams)
-    tools.set_seed_everywhere(config.seed, deterministic=config.deterministic)
     tools.setup_logdir(args, f"reinforce_{args.env_id}", subdirs=["video"])
     config.to_json(args.log_dir / "config.json", indent=4)
-
     writer = SummaryWriter(args.log_dir)
     tools.add_file_handler(logger, args.log_dir / "console.log")
+
+    tools.set_seed_everywhere(config.seed, deterministic=config.deterministic)
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
+    # Instantiate the environment
     env: Env = gym.make(id=args.env_id, render_mode="rgb_array")
     env.action_space.seed(config.seed)
 
@@ -179,33 +181,32 @@ def main(args) -> None:
             and step % config.eval_every_n_steps == 0
         ):
             policy.eval()
-            reward, rew_std, ep_len_mean, frames = tools.evaluate_policy(
+            res = tools.evaluate_policy(
                 agent.deterministic_policy,
                 env=gym.make(args.env_id, render_mode="rgb_array"),
                 n_eval_episodes=config.n_eval_episodes,
-                return_frames=True,
             )
-            writer.add_scalar("eval/return_mean", reward, step)
-            writer.add_scalar("eval/return_std", rew_std, step)
-            writer.add_scalar("eval/ep_len_mean", ep_len_mean, step)
+            writer.add_scalar("eval/return_mean", res.episode_reward_mean, step)
+            writer.add_scalar("eval/return_std", res.episode_reward_std, step)
+            writer.add_scalar("eval/ep_len_mean", res.episode_length_mean, step)
             logger.info(
-                f"Eval at step {step} - total reward: {reward:.3f} +/- {rew_std:.3f} "
+                f"Eval at step {step} - total reward: {res.episode_reward_mean:.3f} +/- {res.episode_reward_std:.3f} "
                 f"across {config.n_eval_episodes} episodes.\n"
                 f"Elapsed time {tools.seconds_to_hms(time.time() - time_enter)}\n"
             )
             suffix = reward_tracker.as_suffix()
-            if reward >= best_score:
-                logger.info(f"Best evaluation score updated from {best_score:.3f} to {reward:.3f}.")
+            if res.episode_reward_mean >= best_score:
+                logger.info(f"Best evaluation score updated from {best_score:.3f} to {res.episode_reward_mean:.3f}.")
                 # Save video
-                dst = f"best_model_{step=}_{episode=}_{reward=:.3f}_{suffix}.{{ext}}"
-                tools.save_video(frames[::2], args.video_dir / dst.format(ext="gif"))
+                dst = f"{step=}_{episode=}_{res.best_episode_reward=:.3f}_{suffix}_best_episode.{{ext}}"
+                tools.save_video(res.best_episode_frames[::2], args.video_dir / dst.format(ext="mp4"))
                 # Save checkpoint
                 tools.save_state_dict(policy, args.ckpts_dir / dst.format(ext="pt"))
-                best_score = reward
+                best_score = res.best_episode_reward
             else:
                 # Save video
-                dst = f"eval_replay_{step=}_{episode=}_{reward=:.3f}_{suffix}.{{ext}}"
-                tools.save_video(frames[::2], args.video_dir / dst.format(ext="gif"))
+                dst = f"eval_replay_{step=}_{episode=}_{res.best_episode_reward=:.3f}_{suffix}.{{ext}}"
+                tools.save_video(res.best_episode_frames[::2], args.video_dir / dst.format(ext="mp4"))
 
             policy.train()
 
@@ -220,13 +221,14 @@ def main(args) -> None:
         batch_acts = torch.tensor(np.int64(batch_acts)).long().to(device)
         batch_qvals = torch.tensor(np.float32(batch_qvals)).float().to(device)
 
-        # Take a single gradient step on policy network
+        # Take a single update step on the policy network
         optimizer.zero_grad()
-        logits = policy(batch_obs)
-        log_probs = F.log_softmax(logits, dim=1)
+        logits = policy(batch_obs)  # logits are the raw, unnormalized scores for each action from the policy
+        log_probs = F.log_softmax(logits, dim=1)  # compute the log probabilities of each action
+        # We want to update the policy such that it takes actions that lead to high rewards more frequently.
         log_probs_act = batch_qvals * log_probs[range(len(batch_qvals)), batch_acts]
-        policy_gradient = log_probs_act.mean()
-        loss = -1 * policy_gradient
+        policy_gradient = log_probs_act.mean()  # expectation of the policy gradient
+        loss = -1 * policy_gradient  # we want to maximize the policy gradient
         loss.backward()
         optimizer.step()
 
