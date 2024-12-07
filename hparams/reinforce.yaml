@@ -6,10 +6,18 @@ defaults:
   seed: 42
   deterministic: false
 
-CartPole-v1:
+CartPole-v0:
   max_steps: 1_000_000
   mean_reward_bound: 195
   gamma: 0.99
   learning_rate: 1.0e-3
   episodes_to_train: 6
   episode_limit_steps: 200
+
+CartPole-v1:
+  max_steps: 1_000_000
+  mean_reward_bound: 475
+  gamma: 0.99
+  learning_rate: 1.0e-3
+  episodes_to_train: 6
+  episode_limit_steps: 500
