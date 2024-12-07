@@ -92,7 +92,7 @@ class StoreDict(argparse.Action):
 
     def __init__(self, option_strings, dest, nargs=None, **kwargs):
         self._nargs = nargs
-        super(StoreDict, self).__init__(option_strings, dest, nargs=nargs, **kwargs)
+        super().__init__(option_strings, dest, nargs=nargs, **kwargs)
 
     def __call__(self, parser, namespace, values, option_string=None):
         arg_dict = {}
@@ -329,7 +329,7 @@ class EvaluationResults:
 def evaluate_policy(
     policy: Callable,
     env: Env = None,
-    make_env_fn: Callable = None,
+    make_env: Callable = None,
     n_eval_episodes: int = 5,
     seed: int | None = None,
     timeout: int = 5000,
@@ -343,9 +343,9 @@ def evaluate_policy(
     Args:
         policy (Callable): A function that takes observation as an input and
             outputs an action
-        make_env_fn (Callable): A function that gives the environment to execute
+        make_env (Callable): A function that gives the environment to execute
             the policy on. This must accept `env_id` param.
-        env (gym.Env): gym.Env object to run agent on. one of make_env_fn and env
+        env (gym.Env): gym.Env object to run agent on. one of make_env and env
             must be passed in.
         seed (int): Seed for env.
         timeout (int): Episode timeout in game steps
@@ -371,12 +371,12 @@ def evaluate_policy(
     if env_kwargs is None:
         env_kwargs = {}
 
-    if env is None and make_env_fn is None:
-        raise ValueError("Either env or make_env_fn param must be passed in.")
+    if env is None and make_env is None:
+        raise ValueError("Either env or make_env param must be passed in.")
 
-    if make_env_fn is not None:
-        assert callable(make_env_fn), "`make_env_fn` must be callable"
-        env = make_env_fn(**env_kwargs)
+    if make_env is not None:
+        assert callable(make_env), "`make_env` must be callable"
+        env = make_env(**env_kwargs)
 
     if seed is not None:
         env.action_space.seed(seed)
