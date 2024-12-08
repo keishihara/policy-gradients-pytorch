@@ -14,6 +14,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
+import gymnasium as gym
 import imageio
 import numpy as np
 import scipy
@@ -672,3 +673,26 @@ def load_module_from_py_file(py_file: str) -> object:
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
     return module
+
+
+def list_registered_envs_by_category(category: str) -> list[str]:
+    """List registered environments by category.
+    Args:
+        category (str): The category of the environments to list.
+
+    Returns:
+        list[str]: A list of registered environment IDs.
+
+    Example:
+        >>> list_registered_envs_by_category("atari")
+    """
+    expected_categories = ["box2d", "classic_control", "mujoco", "phys2d", "atari", "tabular", "toy_text"]
+
+    if category not in expected_categories:
+        print(f"Warning: {category} is not an expected category, but still listing envs...")
+    category = category.lower()
+    envs = []
+    for env_id, env_spec in gym.envs.registry.items():
+        if category in str(env_spec.entry_point):
+            envs.append(env_id)
+    return envs
