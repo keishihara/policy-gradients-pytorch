@@ -349,9 +349,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if args.env_id != "PongNoFrameskip-v4":
-        logger.warning(
-            f"Warning: This script is intended to run with --env-id PongNoFrameskip-v4, but got: {args.env_id}"
-        )
+    if args.env_id not in tools.list_registered_envs_by_category("atari"):
+        raise ValueError("This script is only supported for Atari environments.")
 
     main(args)
